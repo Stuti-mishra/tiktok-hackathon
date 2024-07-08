@@ -114,7 +114,7 @@ def analyze_contrast_errors_in_video(filename, target_frame_rate):
 
                 if text in previous_texts:
                     continue
-                previous_texts.add(text)
+                previous_texts.append(text)
 
                 if box in checked_boxes:
                     continue
@@ -136,14 +136,3 @@ def analyze_contrast_errors_in_video(filename, target_frame_rate):
 
     fvs.stop()
     return contrast_error_count
-
-# Example usage for an image
-image_filename = "path_to_image.jpg"
-image_contrast_error_count = analyze_contrast_errors_in_image(image_filename)
-print(f"Number of contrast errors detected in image: {image_contrast_error_count}")
-
-# Example usage for a video
-video_filename = "path_to_video.mp4"
-target_frame_rate = 3
-video_contrast_error_count = analyze_contrast_errors_in_video(video_filename, target_frame_rate=target_frame_rate)
-print(f"Number of contrast errors detected in video: {video_contrast_error_count}")

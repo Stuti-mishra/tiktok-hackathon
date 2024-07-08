@@ -1,12 +1,8 @@
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import HTMLResponse
-import uvicorn
+import requests
 import cv2
 import numpy as np
 import time
 from typing import List
-
-app = FastAPI()
 
 def luminance_to_brightness(Y):
     return 413.435 * (0.002745 * Y + 0.0189623) ** 2.22
@@ -91,13 +87,28 @@ def categorize_risk(num_violations):
         return "Medium"
     else:
         return "High"
-
-@app.post("/analyze_video/")
-async def analyze_video_endpoint(file: UploadFile = File(...)):
-    video_path = f"./{file.filename}"
+def download_file(url, destination_file_name):
+    # Send a GET request to the URL
+    response = requests.get(url, stream=True)
     
-    with open(video_path, "wb") as f:
-        f.write(await file.read())
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Open a local file with write-binary mode
+        with open(destination_file_name, 'wb') as file:
+            # Iterate over the response data in chunks
+            for chunk in response.iter_content(chunk_size=8192):
+                file.write(chunk)
+        print(f"File downloaded successfully to {destination_file_name}")
+    else:
+        print(f"Failed to download file. HTTP Status Code: {response.status_code}")
+
+# Usage example
+url = 'https://example.com/path/to/your/file.ext'  # Replace with your URL
+destination_file_name = 'path/to/save/your/file.ext'  # Replace with your desired local path
+
+
+def upload_video(file):
+    video_path = f"./{file}"
     
     dangerous_flashes = analyze_video(video_path)
     dangerous_reds = detect_saturated_red(video_path)
@@ -106,118 +117,9 @@ async def analyze_video_endpoint(file: UploadFile = File(...)):
     num_violations = len(dangerous_sections)
     risk_level = categorize_risk(num_violations)
     
-    result_html = f"""
-    <html>
-        <head>
-            <title>Analysis Result</title>
-            <style>
-                .bar {{
-                    width: 100%;
-                    background-color: #ddd;
-                }}
-                .low {{
-                    width: 33.3%;
-                    height: 30px;
-                    background-color: green;
-                }}
-                .medium {{
-                    width: 33.3%;
-                    height: 30px;
-                    background-color: yellow;
-                }}
-                .high {{
-                    width: 33.3%;
-                    height: 30px;
-                    background-color: red;
-                }}
-            </style>
-        </head>
-        <body>
-            <h1>Analysis Result</h1>
-            <p>Number of Violations: {num_violations}</p>
-            <div class="bar">
-                <div class="{risk_level.lower()}"></div>
-            </div>
-            <p>Risk Level: {risk_level}</p>
-            <a href="/">Upload Another Video</a>
-        </body>
-    </html>
-    """
+    result_html = {
+            "Number of Violations": num_violations,
+            "Risk Level": risk_level
+    }
     
-    return HTMLResponse(result_html)
-
-@app.get("/")
-async def main():
-    content = """
-    <html>
-        <head>
-            <title>Video Analysis</title>
-        </head>
-        <body>
-            <h1>Upload Video for Analysis</h1>
-            <form action="/upload-video/" enctype="multipart/form-data" method="post">
-                <input name="file" type="file">
-                <input type="submit">
-            </form>
-            <div id="result"></div>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content)
-
-@app.post("/upload-video/")
-async def upload_video(file: UploadFile = File(...)):
-    video_path = f"./{file.filename}"
-    
-    with open(video_path, "wb") as f:
-        f.write(await file.read())
-    
-    dangerous_flashes = analyze_video(video_path)
-    dangerous_reds = detect_saturated_red(video_path)
-    
-    dangerous_sections = dangerous_flashes + dangerous_reds
-    num_violations = len(dangerous_sections)
-    risk_level = categorize_risk(num_violations)
-    
-    result_html = f"""
-    <html>
-        <head>
-            <title>Analysis Result</title>
-            <style>
-                .bar {{
-                    width: 100%;
-                    background-color: #ddd;
-                }}
-                .low {{
-                    width: 33.3%;
-                    height: 30px;
-                    background-color: green;
-                }}
-                .medium {{
-                    width: 33.3%;
-                    height: 30px;
-                    background-color: yellow;
-                }}
-                .high {{
-                    width: 33.3%;
-                    height: 30px;
-                    background-color: red;
-                }}
-            </style>
-        </head>
-        <body>
-            <h1>Analysis Result</h1>
-            <p>Number of Violations: {num_violations}</p>
-            <div class="bar">
-                <div class="{risk_level.lower()}"></div>
-            </div>
-            <p>Risk Level: {risk_level}</p>
-            <a href="/">Upload Another Video</a>
-        </body>
-    </html>
-    """
-    
-    return HTMLResponse(result_html)
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    return result_html
