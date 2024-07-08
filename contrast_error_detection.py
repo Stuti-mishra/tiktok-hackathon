@@ -1,11 +1,9 @@
 import numpy as np
 import cv2
 import imutils
-from imutils.video import FileVideoStream
 import easyocr
 import time
-
-filename = ""
+from imutils.video import FileVideoStream
 
 # Initialize EasyOCR reader
 reader = easyocr.Reader(['en'])
@@ -49,16 +47,41 @@ def calculate_contrast(color1, color2):
     contrast = abs(luminance1 - luminance2)
     return contrast
 
-def evaluate_contrast(contrast, threshold=100):  # Increase threshold
+def evaluate_contrast(contrast, threshold=100):
     return contrast < threshold
 
-previous_texts = set()
+def analyze_contrast_errors_in_image(image_path):
+    frame = cv2.imread(image_path)
+    frame = imutils.resize(frame, width=450)
+    text_boxes, texts = detect_text(frame)
+    contrast_error_count = 0
+    checked_boxes = []
 
-def analyze_contrast_errors(filename, target_frame_rate):
+    for box, text in zip(text_boxes, texts):
+        if box[2] == 0 or box[3] == 0:
+            continue
+
+        if box in checked_boxes:
+            continue
+        checked_boxes.append(box)
+
+        text_region = frame[box[1]:box[1] + box[3], box[0]:box[0] + box[2]]
+        bg_region = get_background_color(frame, box)
+        
+        text_color = get_average_color(text_region)
+        bg_color = get_average_color(bg_region)
+        
+        contrast = calculate_contrast(text_color, bg_color)
+        if evaluate_contrast(contrast):
+            contrast_error_count += 1
+            print(f"Contrast error detected for text '{text}' in box {box}")
+
+    return contrast_error_count
+
+def analyze_contrast_errors_in_video(filename, target_frame_rate):
     fvs = FileVideoStream(filename).start()
     time.sleep(1.0)
     
-    # Get video properties
     video = cv2.VideoCapture(filename)
     frame_rate = video.get(cv2.CAP_PROP_FPS)
     frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -84,17 +107,15 @@ def analyze_contrast_errors(filename, target_frame_rate):
             frame = imutils.resize(frame, width=450)
             text_boxes, texts = detect_text(frame)
             processed_frames += 1
-
+            previous_texts = []
             for box, text in zip(text_boxes, texts):
                 if box[2] == 0 or box[3] == 0:
                     continue
 
-                # Skip previously detected texts
                 if text in previous_texts:
                     continue
                 previous_texts.add(text)
 
-                # Check if the bounding box has been checked previously
                 if box in checked_boxes:
                     continue
                 checked_boxes.append(box)
@@ -116,8 +137,13 @@ def analyze_contrast_errors(filename, target_frame_rate):
     fvs.stop()
     return contrast_error_count
 
-# Set the target frame rate for analysis
-target_frame_rate = 3
+# Example usage for an image
+image_filename = "path_to_image.jpg"
+image_contrast_error_count = analyze_contrast_errors_in_image(image_filename)
+print(f"Number of contrast errors detected in image: {image_contrast_error_count}")
 
-contrast_error_count = analyze_contrast_errors(filename, target_frame_rate=target_frame_rate)
-print(f"Number of contrast errors detected: {contrast_error_count}")
+# Example usage for a video
+video_filename = "path_to_video.mp4"
+target_frame_rate = 3
+video_contrast_error_count = analyze_contrast_errors_in_video(video_filename, target_frame_rate=target_frame_rate)
+print(f"Number of contrast errors detected in video: {video_contrast_error_count}")
